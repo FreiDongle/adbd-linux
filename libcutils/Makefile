@@ -60,16 +60,12 @@ all: $(LOCAL_MODULE)
 
 %.o: %.cpp
 	${CXX} -c -fPIC $(CXXFLAGS) $(LFLAGS) $< -o $@
-	#g++ -c -fPIC $(CXXFLAGS) $(LFLAGS) $< -o $@
 
 %.o: %.c
 	${CC} -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
-	#gcc -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
 
 $(LOCAL_MODULE): $(OBJS)
 	${AR} rcs $@ $?
-	#ar rcs $@ $?
-	#ranlib $@
 	${RANLIB} $@
 
 clean:

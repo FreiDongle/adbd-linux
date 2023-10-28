@@ -40,11 +40,8 @@ all: $(LOCAL_MODULE)
 
 %.o: %.cpp
 	${CXX} -g -c -fPIC $(CXXFLAGS) $(LFLAGS) $< -o $@
-	#g++ -g -c -fPIC $(CXXFLAGS) $(LFLAGS) $< -o $@
 
 $(LOCAL_MODULE): $(OBJS)
-	#ar rcs $@ $?
-	#ranlib $@
 	${AR} rcs $@ $?
 	${RANLIB} $@
 

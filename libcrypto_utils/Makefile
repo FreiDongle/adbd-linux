@@ -16,13 +16,10 @@ all: $(LOCAL_MODULE)
 
 %.o: %.c
 	${CC} -g -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
-	#gcc -g -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
 
 $(LOCAL_MODULE): $(OBJS)
 	${AR} rcs $@ $?
 	${RANLIB} $@
-	#ar rcs $@ $?
-	#ranlib $@
 
 clean:
 	rm -f $(LOCAL_MODULE) *.o

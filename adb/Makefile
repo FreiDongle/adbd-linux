@@ -72,21 +72,17 @@ CFLAGS= $(OPT_CFLAGS) $(LOCAL_CFLAGS) $(LOCAL_INCLUDES)
 
 %.o: %.cpp
 	${CXX} -g -c -fPIC $(CXXFLAGS) $(LFLAGS) $< -o $@
-	#g++ -g -c -fPIC $(CXXFLAGS) $(LFLAGS) $< -o $@
 
 %.o: %.c
 	${CC} -g -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
-	#gcc -g -c -fPIC $(CFLAGS) $(LFLAGS) $< -o $@
 
 all: $(LOCAL_MODULE) xdg-adbd
 
 $(LOCAL_MODULE): $(OBJS)
 	${CXX} -fPIC $(CXXFLAGS) $^ -L ../libcutils/*.o ../base/*.o ../libcrypto_utils/*.o -lpthread -lresolv -lcrypto -lssl -lutil -o $@
-	#g++ -fPIC $(CXXFLAGS) $^ -L ../libcutils/*.o ../base/*.o ../libcrypto_utils/*.o -lpthread -lresolv -lcrypto -lssl -lutil -o $@
 
 xdg-adbd: xdg-adbd.c
 	${CC} -o $@ $< $(CFLAGS) $(LFLAGS) `pkg-config --libs --cflags glib-2.0`
-	#gcc -o $@ $< $(CFLAGS) $(LFLAGS) `pkg-config --libs --cflags glib-2.0`
 
 clean:
 	rm -f $(LOCAL_MODULE) xdg-adbd *.o daemon/*.o
