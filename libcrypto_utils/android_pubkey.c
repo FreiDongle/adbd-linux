@@ -66,6 +66,7 @@ bool android_pubkey_decode(const uint8_t* key_buffer, size_t size, RSA** key) {
   const RSAPublicKey* key_struct = (RSAPublicKey*)key_buffer;
   bool ret = false;
   uint8_t modulus_buffer[ANDROID_PUBKEY_MODULUS_SIZE];
+  BIGNUM *n = NULL, *e = NULL;
   RSA* new_key = RSA_new();
   if (!new_key) {
     goto cleanup;
@@ -82,14 +83,19 @@ bool android_pubkey_decode(const uint8_t* key_buffer, size_t size, RSA** key) {
   // Convert the modulus to big-endian byte order as expected by BN_bin2bn.
   memcpy(modulus_buffer, key_struct->modulus, sizeof(modulus_buffer));
   reverse_bytes(modulus_buffer, sizeof(modulus_buffer));
-  new_key->n = BN_bin2bn(modulus_buffer, sizeof(modulus_buffer), NULL);
-  if (!new_key->n) {
+  n = BN_bin2bn(modulus_buffer, sizeof(modulus_buffer), NULL);
+  if (!n) {
     goto cleanup;
   }
 
   // Read the exponent.
-  new_key->e = BN_new();
-  if (!new_key->e || !BN_set_word(new_key->e, key_struct->exponent)) {
+  e = BN_new();
+  if (!e || !BN_set_word(e, key_struct->exponent)) {
+    goto cleanup;
+  }
+
+  // assign n, e to key
+  if (!RSA_set0_key(new_key, n, e, NULL)) {
     goto cleanup;
   }
 
@@ -111,7 +117,7 @@ cleanup:
   return ret;
 }
 
-#ifdef ADB_NON_ANDROID
+#if defined(ADB_NON_ANDROID) && OPENSSL_VERSION_NUMBER < 0x1010001fL
 /* From https://android.googlesource.com/platform/external/chromium_org/third_party/boringssl/src/+/6887edb^!/ */
 
 /* constant_time_select_ulong returns |x| if |v| is 1 and |y| if |v| is 0. Its
@@ -180,10 +186,35 @@ int BN_bn2bin_padded(uint8_t *out, size_t len, const BIGNUM *in) {
   return 1;
 }
 
-#endif
+#endif  // if defined(ADB_NON_ANDROID) && OPENSSL_VERSION_NUMBER < 0x1010001fL
+
+#if OPENSSL_VERSION_NUMBER < 0x10101007L
+// https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-pre7/crypto/rsa/rsa_lib.c#L405-L413
+const BIGNUM *RSA_get0_n(const RSA *r) { return r->n; }
+const BIGNUM *RSA_get0_e(const RSA *r) { return r->e; }
+
+// https://github.com/openssl/openssl/blob/OpenSSL_1_1_0-pre6/crypto/rsa/rsa_lib.c#L188-L212
+int RSA_set0_key(RSA *r, BIGNUM *n, BIGNUM *e, BIGNUM *d)
+{
+    /* If the fields n and e in r are NULL, the corresponding input
+     * parameters MUST be non-NULL for n and e.  d may be
+     * left NULL (in case only the public key is used).
+     */
+    if ((r->n == NULL && n == NULL) || (r->e == NULL && e == NULL)) return 0;
+    if (n != NULL) { BN_free(r->n); r->n = n; }
+    if (e != NULL) { BN_free(r->e); r->e = e; }
+    if (d != NULL) { BN_free(r->d); r->d = d; }
+    return 1;
+}
+
+#endif  // if OPENSSL_VERSION_NUMBER < 0x10101007L
 
 static bool android_pubkey_encode_bignum(const BIGNUM* num, uint8_t* buffer) {
+#if OPENSSL_VERSION_NUMBER < 0x1010001fL
   if (!BN_bn2bin_padded(buffer, ANDROID_PUBKEY_MODULUS_SIZE, num)) {
+#else
+  if (!BN_bn2binpad(num, buffer, ANDROID_PUBKEY_MODULUS_SIZE)) {
+#endif
     return false;
   }
 
@@ -209,26 +240,26 @@ bool android_pubkey_encode(const RSA* key, uint8_t* key_buffer, size_t size) {
 
   // Compute and store n0inv = -1 / N[0] mod 2^32.
   if (!ctx || !r32 || !n0inv || !BN_set_bit(r32, 32) ||
-      !BN_mod(n0inv, key->n, r32, ctx) ||
+      !BN_mod(n0inv, RSA_get0_n(key), r32, ctx) ||
       !BN_mod_inverse(n0inv, n0inv, r32, ctx) || !BN_sub(n0inv, r32, n0inv)) {
     goto cleanup;
   }
   key_struct->n0inv = (uint32_t)BN_get_word(n0inv);
 
   // Store the modulus.
-  if (!android_pubkey_encode_bignum(key->n, key_struct->modulus)) {
+  if (!android_pubkey_encode_bignum(RSA_get0_n(key), key_struct->modulus)) {
     goto cleanup;
   }
 
   // Compute and store rr = (2^(rsa_size)) ^ 2 mod N.
   if (!ctx || !rr || !BN_set_bit(rr, ANDROID_PUBKEY_MODULUS_SIZE * 8) ||
-      !BN_mod_sqr(rr, rr, key->n, ctx) ||
+      !BN_mod_sqr(rr, rr, RSA_get0_n(key), ctx) ||
       !android_pubkey_encode_bignum(rr, key_struct->rr)) {
     goto cleanup;
   }
 
   // Store the exponent.
-  key_struct->exponent = (uint32_t)BN_get_word(key->e);
+  key_struct->exponent = (uint32_t)BN_get_word(RSA_get0_e(key));
 
   ret = true;
 
